@@ -33,7 +33,7 @@ class @Controls
 
 
     showCrosshair: -> document.getElementById('cursor').style.display = 'block'
-    hideCrosshair: -> document.getElementById('cursor').style.display = 'none'
+    ###hideCrosshair: -> document.getElementById('cursor').style.display = 'none'###
 
     onMouserEnter: (event) ->
         @onMouseUp(event) unless MouseEvent.isLeftButtonDown event

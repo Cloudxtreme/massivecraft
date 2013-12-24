@@ -339,7 +339,7 @@ class Game
             $(document).bind 'keyup', key, =>
                 @keysDown[key] = false
                 return false
-        for key in "wasd".split('').concat('space', 'up', 'down', 'left', 'right')
+        for key in "zqsd".split('').concat('space', 'up', 'down', 'left', 'right')
             bindit key
         $(document).bind 'keydown', 'p', => @togglePause()
         for target in [document, @canvas]
@@ -466,13 +466,20 @@ class Game
 
     collides: -> @collisionHelper.collides()
 
+    goFullScreen: ->
+        PointerLock.init onEnable: @enablePointLock, onDisable: @disablePointLock
+        PointerLock.fullScreenLock($("#app").get(0))
+        
+
     start: ->
         animate = =>
             @tick() unless @pause
             requestAnimationFrame animate, @renderer.domElement
         animate()
-        PointerLock.init onEnable: @enablePointLock, onDisable: @disablePointLock
-        PointerLock.fullScreenLock($("#app").get(0))
+        @goFullScreen()
+        ###PointerLock.init onEnable: @enablePointLock, onDisable: @disablePointLock
+        PointerLock.fullScreenLock($("#app").get(0))###
+
 
     enablePointLock: =>
         $("#cursor").show()
@@ -480,7 +487,7 @@ class Game
         @fullscreen = on
 
     disablePointLock: =>
-        $("#cursor").hide()
+        ###$("#cursor").hide()###
         @controls.disableMouseLocked()
         @fullscreen = off
 
@@ -505,11 +512,11 @@ class Game
 
 
     playerKeys:
-        w: 'z+'
+        z: 'z+'
         up: 'z+'
         s: 'z-'
         down: 'z-'
-        a: 'x+'
+        q: 'x+'
         left: 'x+'
         d: 'x-'
         right: 'x-'
@@ -587,3 +594,5 @@ class Game
             game.start()
         new Instructions(startGame).insert()
 
+    goFullScreen: ->
+        window.game.goFullScreen()
