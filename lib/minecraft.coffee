@@ -307,6 +307,15 @@ class Game
       middlePos = middle * CubeSize
       @player.pos.set middlePos, playerHeight, middlePos
 
+      materials = MTexture({
+        texturePath: './textures/',
+        materialType: THREE.MeshLambertMaterial,
+        materialParams: {},
+        materialFlatColor: false
+      })
+      materialNames = [['grass', 'dirt', 'grass_dirt'], 'brick', 'dirt']
+      materials.load(materialNames)
+      
       mmesh = new MMesh({voxels:@chunk, dims:[32,32,32]})
       mat =  new THREE.MeshFaceMaterial(@currentMeshSpec.material)
       console.log(mat)
