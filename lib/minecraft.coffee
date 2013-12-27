@@ -185,6 +185,7 @@ class Floor
 
 class Game
     constructor: (@populateWorldFunction) ->
+        @chunk = []
         @rad = CubeSize
         @currentMeshSpec = @createGrassGeometry()
         @cubeBlocks = @createBlocksGeometry()
@@ -212,8 +213,20 @@ class Game
         @toDelete = null
         @collisionHelper = new CollisionHelper(@player, @grid)
         @clock = new Clock()
+        @world_size = 10
         @populateWorld()
         @defineControls()
+
+        @stats = new Stats()
+        @stats.setMode(0) # 0: fps, 1: ms
+
+        # Align top-left
+        @stats.domElement.style.position = 'absolute';
+        @stats.domElement.style.left = '0px';
+        @stats.domElement.style.top = '0px';
+        @stats.domElement.style.zindex = '9';
+        $('#app').append(@stats.domElement )
+
 
 
     width: -> window.innerWidth
@@ -252,7 +265,8 @@ class Game
 
 
     generateHeight: ->
-        size = 11
+        size = @world_size*2 + 1
+        size = 999
         data = []
         size.times (i) ->
             data[i] = []
@@ -273,14 +287,87 @@ class Game
       middle = @grid.size / 2
       data = @generateHeight()
       playerHeight = null
-      for i in [-5..5]
-        for j in [-5..5]
-          height =(Math.abs Math.floor(data[i + 5][j + 5])) + 1
+      ###
+      for i in [-@world_size..@world_size]
+        for j in [-@world_size..@world_size]
+      ###
+      @world_size = 32
+      for i in [0..31]
+        for j in [0..31]
+          height = (Math.abs Math.floor(data[i + @world_size][j + @world_size])) + 1
           playerHeight = (height + 1) * CubeSize if i == 0 and j == 0
           height.times (k) => @cubeAt middle + i , k, middle + j
+          for k in [0..31]
+            idx = j*32*32 + k*32 + i
+            if k < height
+              @chunk[idx] = 1
+            else
+              @chunk[idx] = 0
+      console.log(@chunk)
       middlePos = middle * CubeSize
       @player.pos.set middlePos, playerHeight, middlePos
 
+      mmesh = new MMesh({voxels:@chunk, dims:[32,32,32]})
+      mat =  new THREE.MeshFaceMaterial(@currentMeshSpec.material)
+      console.log(mat)
+      mmesh.createSurfaceMesh( mat)
+      mmesh.surfaceMesh.position.set CubeSize * middle - (CubeSize/2) , 0, CubeSize * middle - (CubeSize/2)
+      mmesh.surfaceMesh.name = "block"      
+      mmesh.addToScene(@scene)
+      ###
+      result = Greedy(@chunk, [32,32,32])
+      console.log(result)
+      geometry = new THREE.Geometry()
+      scale = new THREE.Vector3(10, 10, 10)
+      geometry.vertices.length = 0
+      geometry.faces.length = 0
+      `
+      for (i = 0; i < result.vertices.length; ++i) {
+           q = result.vertices[i]
+           geometry.vertices.push(new this.THREE.Vector3(q[0], q[1], q[2]))
+       }
+       for (i = 0; i < result.faces.length; ++i) {
+            geometry.faceVertexUvs[0].push(this.faceVertexUv(i))
+
+            q = result.faces[i]
+            if (q.length === 5) {
+               f = new this.THREE.Face4(q[0], q[1], q[2], q[3])
+               f.color = new this.THREE.Color(q[4])
+               geometry.faces.push(f)
+            } else if (q.length == 4) {
+              f = new this.THREE.Face3(q[0], q[1], q[2])
+              f.color = new this.THREE.Color(q[3])
+              geometry.faces.push(f)
+            }
+       }
+
+       geometry.computeFaceNormals()
+       // compute vertex colors for ambient occlusion
+       light = new THREE.Color(0xffffff)
+       shadow = new THREE.Color(0x505050)
+       for (i = 0; i < geometry.faces.length; ++i) {
+         face = geometry.faces[i]
+         // facing up
+         if (face.normal.y === 1)       face.vertexColors = [light, light, light, light]
+         // facing down
+        else if (face.normal.y === -1) face.vertexColors = [shadow, shadow, shadow, shadow]
+        // facing right
+        else if (face.normal.x === 1)  face.vertexColors = [shadow, light, light, shadow]
+        // facing left
+        else if (face.normal.x === -1) face.vertexColors = [shadow, shadow, light, light]
+        // facing backward
+        else if (face.normal.z === 1)  face.vertexColors = [shadow, shadow, light, light]
+        // facing forward
+        else                           face.vertexColors = [shadow, light, light, shadow]
+        }
+
+        geometry.verticesNeedUpdate = true
+        geometry.elementsNeedUpdate = true
+        geometry.normalsNeedUpdate = true                
+        geometry.computeBoundingBox()
+        geometry.computeBoundingSphere()
+        `
+        ###
 
     populateWorld2: ->
         middle = @grid.size / 2
@@ -292,6 +379,7 @@ class Game
             [middle, 3, middle] 
         pos = (i * CubeSize for i in ret)
         @player.pos.set pos...
+
 
     cubeAt: (x, y, z, meshSpec, validatingFunction) ->
         meshSpec or=@currentMeshSpec
@@ -305,7 +393,9 @@ class Game
         if validatingFunction?
             return unless validatingFunction(mesh)
         @grid.put x, y, z, mesh
+        ###
         @scene.add mesh
+        ###
         mesh.updateMatrix()
         mesh.matrixAutoUpdate = false
         return
@@ -577,6 +667,7 @@ class Game
         @controls.update()
         @setCameraEyes()
         @renderer.render @scene, @camera
+        @stats.update()
         return
 
 @Minecraft =
