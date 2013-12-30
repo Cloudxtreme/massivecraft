@@ -8,12 +8,12 @@
 
 vec = (x, y, z) -> new Vector3 x, y, z
 
-CubeSize = 50
+CubeSize = 25
 
 class Player
     width: CubeSize * 0.3
-    depth: CubeSize * 0.3
-    height: CubeSize * 1.63
+    depth: CubeSize  * 0.3
+    height: CubeSize  * 1.63
 
     constructor: ->
         @halfHeight = @height / 2
@@ -58,17 +58,37 @@ class Player
 
 class Grid
     constructor: (@size = 5) ->
+        ###
         @matrix = []
-        @size.times (i) =>
-            @matrix[i] = []
-            @size.times (j) =>
-                @matrix[i][j] = []
+        for i in [-@size..@size]
+            @matrix[i+@size] = []
+            for j in [-@size..@size]
+                @matrix[i+@size][j+@size] = []
+        ###
+        @matrix = {}
 
-    insideGrid: (x, y, z) -> 0 <= x < @size and 0 <= y < @size and 0 <= z < @size
+    insideGrid: (x, y, z) -> true
+    
+    get: (x, y, z) ->
+        key = x+'-'+y+'-'+z
+        if not @matrix[key]?
+            return null
+        return @matrix[key]
+        ###
+        console.log('GET '+x+' '+ y+' '+ z)
+        mx = @matrix[x] 
+        if mx?
+           return null
+        if not @matrix[x][y]?
+           return null
+        if not @matrix[x][y][z]?
+           return null
+        return @matrix[x][y][z]
+        ###
 
-    get: (x, y, z) -> @matrix[x][y][z]
-
-    put: (x, y, z, val) -> @matrix[x][y][z] = val
+    put: (x, y, z, val) ->
+        key = x+'-'+y+'-'+z
+        @matrix[key] = val        
 
     gridCoords: (x, y, z) ->
         x = Math.floor(x / CubeSize)
@@ -84,7 +104,9 @@ class CollisionHelper
 
     collides: ->
         return true if @player.collidesWithGround()
+        ###
         return true if @beyondBounds()
+        ###
         playerBox = @player.boundingBox()
         for cube in @possibleCubes()
             return true if @_collideWithCube playerBox, cube
@@ -116,6 +138,9 @@ class CollisionHelper
         grid = @grid
         @withRange (x, y, z) ->
             cube = grid.get x, y, z
+            ###
+            console.log('GET '+x+' '+y+' '+z+' GOT'+cube)
+            ###
             cubes.push cube if cube?
         return cubes
 
@@ -128,6 +153,7 @@ class CollisionHelper
         maxx = @toGrid(vmax.x + @rad)
         maxy = @toGrid(vmax.y + @rad)
         maxz = @toGrid(vmax.z + @rad)
+
         x = minx
         while x <= maxx
             y = miny
@@ -140,10 +166,9 @@ class CollisionHelper
             x++
         return
 
+
     toGrid: (val) ->
         ret = Math.floor(val / @rad)
-        return 0 if ret < 0
-        return @grid.size - 1 if ret > @grid.size - 1
         return ret
 
 
@@ -187,6 +212,7 @@ class Game
     constructor: (@populateWorldFunction) ->
         @chunk = []
         @rad = CubeSize
+        @createMaterials()
         @currentMeshSpec = @createGrassGeometry()
         @cubeBlocks = @createBlocksGeometry()
         @selectCubeBlock 'cobblestone'
@@ -229,8 +255,20 @@ class Game
 
 
 
+
     width: -> window.innerWidth
     height: -> window.innerHeight
+
+    createMaterials: ->
+        @materials = MTexture({
+                texturePath: './textures/',
+                materialType: THREE.MeshLambertMaterial,
+                materialParams: {},
+                materialFlatColor: false
+        })
+        materialNames = [['grass', 'dirt', 'grass_dirt'], 'brick', 'dirt']
+        @materials.load(materialNames)
+
 
     createBlocksGeometry: ->
         cubeBlocks = {}
@@ -265,8 +303,7 @@ class Game
 
 
     generateHeight: ->
-        size = @world_size*2 + 1
-        size = 999
+        size = 64
         data = []
         size.times (i) ->
             data[i] = []
@@ -283,20 +320,36 @@ class Game
             quality *= 4
         data
 
+
     populateWorld: ->
-      middle = @grid.size / 2
+      for i in [-1 .. 1]
+         for j in [-1..1]
+             t0 = new Date().getTime();
+             @createChunk(i,j)
+             diff = new Date().getTime() - t0
+             console.log('CHUNK GENERATION IN '+diff)
+
+
+    createChunk: (px, pz) ->
+      middle = px * 32 / 2 + 1
+      xoffset = px*32
+      zoffset = pz*32
+      px32 = px*32 * CubeSize
+      pz32 = pz*32 * CubeSize
+
+      middle = 1
+      t0 = new Date().getTime();      
       data = @generateHeight()
+      diff = new Date().getTime() - t0
+      console.log('GenerateHeght '+diff)      
       playerHeight = null
-      ###
-      for i in [-@world_size..@world_size]
-        for j in [-@world_size..@world_size]
-      ###
       @world_size = 32
       for i in [0..31]
         for j in [0..31]
           height = (Math.abs Math.floor(data[i + @world_size][j + @world_size])) + 1
           playerHeight = (height + 1) * CubeSize if i == 0 and j == 0
-          height.times (k) => @cubeAt middle + i , k, middle + j
+          playerHeight = 300
+          height.times (k) => @cubeAt xoffset + middle + i , k, zoffset + middle + j
           for k in [0..31]
             idx = j*32*32 + k*32 + i
             if k < height
@@ -306,77 +359,31 @@ class Game
       console.log(@chunk)
       middlePos = middle * CubeSize
       @player.pos.set middlePos, playerHeight, middlePos
+      t0 = new Date().getTime();
+      @createMesh middle, px32, pz32, @chunk
+      diff = new Date().getTime() - t0
+      console.log('CREATE MESH '+diff)
 
-      materials = MTexture({
-        texturePath: './textures/',
-        materialType: THREE.MeshLambertMaterial,
-        materialParams: {},
-        materialFlatColor: false
-      })
-      materialNames = [['grass', 'dirt', 'grass_dirt'], 'brick', 'dirt']
-      materials.load(materialNames)
-      
-      mmesh = new MMesh({voxels:@chunk, dims:[32,32,32]})
+
+    createMesh: (middle, px32, pz32, voxels) ->      
+      mmesh = new MMesh({voxels:voxels, dims:[32,32,32]}, CubeSize)
       mat =  new THREE.MeshFaceMaterial(@currentMeshSpec.material)
-      console.log(mat)
-      mmesh.createSurfaceMesh( mat)
-      mmesh.surfaceMesh.position.set CubeSize * middle - (CubeSize/2) , 0, CubeSize * middle - (CubeSize/2)
-      mmesh.surfaceMesh.name = "block"      
-      mmesh.addToScene(@scene)
       ###
-      result = Greedy(@chunk, [32,32,32])
-      console.log(result)
-      geometry = new THREE.Geometry()
-      scale = new THREE.Vector3(10, 10, 10)
-      geometry.vertices.length = 0
-      geometry.faces.length = 0
-      `
-      for (i = 0; i < result.vertices.length; ++i) {
-           q = result.vertices[i]
-           geometry.vertices.push(new this.THREE.Vector3(q[0], q[1], q[2]))
-       }
-       for (i = 0; i < result.faces.length; ++i) {
-            geometry.faceVertexUvs[0].push(this.faceVertexUv(i))
+      wireMaterial = new THREE.MeshBasicMaterial({color : 0x3D3D3D, wireframe : true })
+      ###
+      mmesh.createSurfaceMesh(@materials.material)
+      ###
+      mmesh.createSurfaceMesh(wireMaterial)
+      ###
+      mmesh.surfaceMesh.position.set CubeSize * middle - (CubeSize/2) + px32, 0, CubeSize * middle - (CubeSize/2) + pz32
 
-            q = result.faces[i]
-            if (q.length === 5) {
-               f = new this.THREE.Face4(q[0], q[1], q[2], q[3])
-               f.color = new this.THREE.Color(q[4])
-               geometry.faces.push(f)
-            } else if (q.length == 4) {
-              f = new this.THREE.Face3(q[0], q[1], q[2])
-              f.color = new this.THREE.Color(q[3])
-              geometry.faces.push(f)
-            }
-       }
+      mmesh.surfaceMesh.name = "greedy"
+      
+      @materials.paint(mmesh.surfaceMesh)
+      
+      mmesh.addToScene(@scene)
 
-       geometry.computeFaceNormals()
-       // compute vertex colors for ambient occlusion
-       light = new THREE.Color(0xffffff)
-       shadow = new THREE.Color(0x505050)
-       for (i = 0; i < geometry.faces.length; ++i) {
-         face = geometry.faces[i]
-         // facing up
-         if (face.normal.y === 1)       face.vertexColors = [light, light, light, light]
-         // facing down
-        else if (face.normal.y === -1) face.vertexColors = [shadow, shadow, shadow, shadow]
-        // facing right
-        else if (face.normal.x === 1)  face.vertexColors = [shadow, light, light, shadow]
-        // facing left
-        else if (face.normal.x === -1) face.vertexColors = [shadow, shadow, light, light]
-        // facing backward
-        else if (face.normal.z === 1)  face.vertexColors = [shadow, shadow, light, light]
-        // facing forward
-        else                           face.vertexColors = [shadow, light, light, shadow]
-        }
 
-        geometry.verticesNeedUpdate = true
-        geometry.elementsNeedUpdate = true
-        geometry.normalsNeedUpdate = true                
-        geometry.computeBoundingBox()
-        geometry.computeBoundingSphere()
-        `
-        ###
 
     populateWorld2: ->
         middle = @grid.size / 2
@@ -390,21 +397,24 @@ class Game
         @player.pos.set pos...
 
 
-    cubeAt: (x, y, z, meshSpec, validatingFunction) ->
+    cubeAt: (x, y, z, meshSpec, visible, validatingFunction) ->
         meshSpec or=@currentMeshSpec
-        raise "bad material" unless meshSpec.geometry?
-        raise "really bad material" unless meshSpec.material?
-        mesh = new Mesh(meshSpec.geometry, new THREE.MeshFaceMaterial(meshSpec.material))
+        if not visible?
+           visible = false
+        console.log('VISIBLE?'+visible)      
+        wireMaterial = new THREE.MeshBasicMaterial({color : 0xffffff, wireframe : true })
+        mesh = new Mesh(meshSpec.geometry, wireMaterial)
         mesh.geometry.dynamic = false
         halfcube = CubeSize / 2
         mesh.position.set CubeSize * x, y * CubeSize + halfcube, CubeSize * z
         mesh.name = "block"
+        # only used for raycasting
+        mesh.visible = visible
         if validatingFunction?
             return unless validatingFunction(mesh)
+
         @grid.put x, y, z, mesh
-        ###
         @scene.add mesh
-        ###
         mesh.updateMatrix()
         mesh.matrixAutoUpdate = false
         return
@@ -464,6 +474,7 @@ class Game
     onMouseDown: (e) ->
         @moved = false
         return unless MouseEvent.isRightButton e
+        console.log('RIGHT BUTTON')
         @castRay = @_targetPosition(e)
 
     _targetPosition: (e) ->
@@ -484,6 +495,8 @@ class Game
 
     findBlock: (ray) ->
         for o in ray.intersectObjects(@scene.children)
+            console.log('WHAT IS?')
+            console.log(o)
             return o unless o.object.name is 'floor'
         return null
 
@@ -491,7 +504,12 @@ class Game
     deleteBlockInGrid: (ray) ->
         target = @findBlock ray
         return unless target?
+        dist = target.distance
+        if dist > CubeSize * @handLength
+           return
+        ###
         return unless @withinHandDistance target.object.position
+        ###
         mesh = target.object
         @scene.remove mesh
         {x, y, z} = mesh.position
@@ -543,19 +561,24 @@ class Game
         return @getAdjacentCubePosition target
 
     createCubeAt: (x, y, z) ->
-        @cubeAt x, y, z, @currentCube, (cube) => not @collisionHelper.collideWithCube cube
+        console.log('CREATING NEW CUBE AT'+x+ ' '+y+' '+z)
+        @cubeAt x, y, z,  @currentCube, true, (cube) => not @collisionHelper.collideWithCube cube
 
     handLength: 7
 
     withinHandDistance: (pos) ->
         dist = pos.distanceTo @player.position()
+        console.log('DIST '+dist)
         return dist <= CubeSize * @handLength
 
     placeBlockInGrid: (ray) ->
         p = @getNewCubePosition ray
+        console.log('P?'+p)
+        console.log(p)
         return unless p?
         gridPos = @gridCoords p.x, p.y, p.z
         [x, y, z] = gridPos
+        console.log('withinHandDistance'+@withinHandDistance p)
         return unless @withinHandDistance p
         return unless @grid.insideGrid x, y, z
         return if @grid.get(x, y, z)?

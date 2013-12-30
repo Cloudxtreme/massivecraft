@@ -1,10 +1,10 @@
 
 //JEAN
-function MMesh(data) {
+function MMesh(data, scale) {
   this.data = data
   mesher = Greedy
   var geometry = this.geometry = new THREE.Geometry()
-  this.scale = new THREE.Vector3(50, 50, 50)
+  this.scale = new THREE.Vector3(scale, scale, scale)
 
   var result = mesher( data.voxels, data.dims )
   this.meshed = result
@@ -18,13 +18,21 @@ function MMesh(data) {
   } 
   
   for (var i = 0; i < result.faces.length; ++i) {
+    //console.log(result.faces[i])
+    geometry.faceVertexUvs[0].push(this.faceVertexUv(i))
     geometry.faceVertexUvs[0].push(this.faceVertexUv(i))
     
     var q = result.faces[i]
     if (q.length === 5) {
-      var f = new THREE.Face4(q[0], q[1], q[2], q[3])
+
+      var f = new THREE.Face3(q[0], q[1], q[2])
       f.color = new THREE.Color(q[4])
       geometry.faces.push(f)
+
+      var f = new THREE.Face3(q[0], q[2], q[3])
+      f.color = new THREE.Color(q[4])
+      geometry.faces.push(f)
+
     } else if (q.length == 4) {
       var f = new THREE.Face3(q[0], q[1], q[2])
       f.color = new THREE.Color(q[3])
@@ -59,6 +67,8 @@ function MMesh(data) {
 
   geometry.computeBoundingBox()
   geometry.computeBoundingSphere()
+  geometry.computeFaceNormals();
+  geometry.computeVertexNormals();
 
 }
 
@@ -78,7 +88,7 @@ MMesh.prototype.createSurfaceMesh = function(material) {
   material = material || new THREE.MeshNormalMaterial()
   var surfaceMesh  = new THREE.Mesh( this.geometry, material )
   surfaceMesh.scale = this.scale
-  surfaceMesh.doubleSided = false
+  surfaceMesh.doubleSided = true //false
   this.surfaceMesh = surfaceMesh
   return surfaceMesh
 }
@@ -143,19 +153,21 @@ MMesh.prototype.faceVertexUv = function(i) {
       var height = size.x
     }
   }
-  if ((size.z === 0 && spans.x0 < spans.x1) || (size.x === 0 && spans.y0 > spans.y1)) {
-    return [
-      new THREE.Vector2(height, 0),
-      new THREE.Vector2(0, 0),
-      new THREE.Vector2(0, width),
-      new THREE.Vector2(height, width)
-    ]
-  } else {
-    return [
-      new THREE.Vector2(0, 0),
-      new THREE.Vector2(0, height),
-      new THREE.Vector2(width, height),
-      new THREE.Vector2(width, 0)
-    ]
-  }
+    
+    if ((size.z === 0 && spans.x0 < spans.x1) || (size.x === 0 && spans.y0 > spans.y1)) {
+	return [
+	      new THREE.Vector2(height, 0),
+	    new THREE.Vector2(0, 0),
+	      new THREE.Vector2(0, width),
+	      new THREE.Vector2(height, width)
+	  ]
+      } else {
+	  return [
+	      new THREE.Vector2(0, 0),
+	      new THREE.Vector2(0, height),
+	      new THREE.Vector2(width, height),
+	      new THREE.Vector2(width, 0)
+	  ]
+      }
+
 }

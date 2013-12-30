@@ -199,6 +199,7 @@ MTexture.prototype.paint = function(mesh, materials) {
   var isVoxelMesh = (materials) ? false : true;
   if (!isVoxelMesh) materials = self._expandName(materials);
 
+  //console.log('NUMBER OF FACES'+ mesh.geometry.faces.length);
   mesh.geometry.faces.forEach(function(face, i) {
     if (mesh.geometry.faceVertexUvs[0].length < 1) return;
 
@@ -230,16 +231,25 @@ MTexture.prototype.paint = function(mesh, materials) {
     // 3 -- 2
     // faces on these meshes are flipped vertically, so we map in reverse
     // TODO: tops need rotate
-    if (isVoxelMesh) {
+    isVoxelMesh = true;
+    if (isVoxelMesh && (i % 2 == 0)) {
       if (face.normal.z === -1 || face.normal.x === 1) {
         atlasuv = uvrot(atlasuv, 90);
       }
       atlasuv = uvinvert(atlasuv);
     } else {
-      atlasuv = uvrot(atlasuv, -90);
+      if (face.normal.z === -1 || face.normal.x === 1) {
+        atlasuv = uvrot(atlasuv, 180);
+      }
+      atlasuv = uvinvert(atlasuv);
     }
     for (var j = 0; j < 4; j++) {
-      mesh.geometry.faceVertexUvs[0][i][j].set(atlasuv[j][0], 1 - atlasuv[j][1]);
+      var arg1 = atlasuv[j][0]
+      var arg2 = 1 - atlasuv[j][1]
+      //console.log(mesh.geometry.faceVertexUvs[0].length)
+      if(typeof mesh.geometry.faceVertexUvs[0][i] !== 'undefined'){
+         mesh.geometry.faceVertexUvs[0][i][j].set(atlasuv[j][0], 1 - atlasuv[j][1]);
+      }
     }
   });
 
