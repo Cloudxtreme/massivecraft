@@ -58,33 +58,23 @@ class Player
 
 class Grid
     constructor: (@size = 5) ->
-        ###
-        @matrix = []
-        for i in [-@size..@size]
-            @matrix[i+@size] = []
-            for j in [-@size..@size]
-                @matrix[i+@size][j+@size] = []
-        ###
         @matrix = {}
 
     insideGrid: (x, y, z) -> true
-    
+
+
+    get_all:->
+        res = []
+        for own k, v of @matrix
+            res.push(v)
+        res
+        
+            
     get: (x, y, z) ->
         key = x+'-'+y+'-'+z
         if not @matrix[key]?
             return null
         return @matrix[key]
-        ###
-        console.log('GET '+x+' '+ y+' '+ z)
-        mx = @matrix[x] 
-        if mx?
-           return null
-        if not @matrix[x][y]?
-           return null
-        if not @matrix[x][y][z]?
-           return null
-        return @matrix[x][y][z]
-        ###
 
     put: (x, y, z, val) ->
         key = x+'-'+y+'-'+z
@@ -138,9 +128,6 @@ class CollisionHelper
         grid = @grid
         @withRange (x, y, z) ->
             cube = grid.get x, y, z
-            ###
-            console.log('GET '+x+' '+y+' '+z+' GOT'+cube)
-            ###
             cubes.push cube if cube?
         return cubes
 
@@ -225,13 +212,17 @@ class Game
         @renderer = @createRenderer()
         @rendererPosition = $("#minecraft-container canvas").offset()
         @camera = @createCamera()
+        @ray_camera = @createCamera()        
         THREEx.WindowResize @renderer, @camera
         @canvas = @renderer.domElement
         @controls = new Controls @camera, @canvas
         @player = new Player()
         @scene = new Scene()
+        @ray_scene = new Scene()        
         new Floor(50000, 50000).addToScene @scene
         @scene.add @camera
+        @ray_scene.add @ray_camera
+        
         @addLights @scene
         @projector = new Projector()
         @castRay = null
@@ -274,6 +265,7 @@ class Game
         cubeBlocks = {}
         for b in Blocks
             geo = new THREE.CubeGeometry @rad, @rad, @rad, 1, 1, 1
+            geo.computeFaceNormals()
             t = @texture(b)
             cubeBlocks[b] = @meshSpec geo, [t, t, t, t, t, t]
         return cubeBlocks
@@ -286,7 +278,9 @@ class Game
             dirt, # bottom
             grass_dirt, # back
             grass_dirt]  #front
-        @meshSpec new THREE.CubeGeometry( @rad, @rad, @rad, 1, 1, 1), materials
+        geo = new THREE.CubeGeometry( @rad, @rad, @rad, 1, 1, 1)
+        geo.computeFaceNormals()
+        @meshSpec geo, materials
 
     texture: (name) -> TextureHelper.loadTexture "./textures/#{name}.png"
 
@@ -401,22 +395,30 @@ class Game
         meshSpec or=@currentMeshSpec
         if not visible?
            visible = false
-        console.log('VISIBLE?'+visible)      
-        wireMaterial = new THREE.MeshBasicMaterial({color : 0xffffff, wireframe : true })
+        console.log('VISIBLE?'+visible)
+        if visible
+            wireMaterial = new THREE.MeshBasicMaterial({color : 0xffffff, wireframe : true, doubleSide:true })
+        else
+            wireMaterial = new THREE.MeshBasicMaterial( { visible: false } )
         mesh = new Mesh(meshSpec.geometry, wireMaterial)
         mesh.geometry.dynamic = false
         halfcube = CubeSize / 2
         mesh.position.set CubeSize * x, y * CubeSize + halfcube, CubeSize * z
         mesh.name = "block"
-        # only used for raycasting
+        visible = true
         mesh.visible = visible
+
         if validatingFunction?
             return unless validatingFunction(mesh)
 
         @grid.put x, y, z, mesh
-        @scene.add mesh
+        # always add the mesh to a special scene done for raycasting
+        @ray_scene.add mesh
+        if visible
+            @scene.add mesh
         mesh.updateMatrix()
         mesh.matrixAutoUpdate = false
+
         return
 
     createCamera: ->
@@ -494,7 +496,13 @@ class Game
         return
 
     findBlock: (ray) ->
+        ###
         for o in ray.intersectObjects(@scene.children)
+        ###
+        cubes = @grid.get_all()
+        console.log('CUBES')
+        console.log(cubes)
+        for o in ray.intersectObjects(cubes)
             console.log('WHAT IS?')
             console.log(o)
             return o unless o.object.name is 'floor'
@@ -504,28 +512,40 @@ class Game
     deleteBlockInGrid: (ray) ->
         target = @findBlock ray
         return unless target?
-        dist = target.distance
-        if dist > CubeSize * @handLength
-           return
-        ###
+        
         return unless @withinHandDistance target.object.position
-        ###
+        
         mesh = target.object
         @scene.remove mesh
+        @ray_scene.remove mesh        
         {x, y, z} = mesh.position
         @intoGrid x, y, z, null
         return
 
 
     placeBlock: ->
-        return unless @castRay?
+        if not @castRay?
+           return
         [x, y] = @castRay
         x = (x / @width()) * 2 - 1
         y = (-y / @height()) * 2 + 1
         vector = vec x, y, 1
+        cam = @camera
+        @ray_camera.position = @camera.position
+        @ray_camera.fov = @camera.fov
+        @ray_camera.rotation = @camera.rotation
+        @ray_camera.projectionMatrix = @camera.projectionMatrix
+        console.log(@ray_camera)
+        console.log(@camera)        
+        ###
         @projector.unprojectVector vector, @camera
         todir = vector.sub(@camera.position).normalize()
         @placeBlockInGrid new Raycaster @camera.position, todir
+        ###
+        @projector.unprojectVector vector, cam
+        todir = vector.sub(cam.position).normalize()
+        @placeBlockInGrid new Raycaster cam.position, todir
+                                
         @castRay = null
         return
 
@@ -557,7 +577,12 @@ class Game
 
     getNewCubePosition: (ray) ->
         target = @findBlock ray
-        return @getCubeOnFloorPosition ray unless target?
+        if not target?
+            return @getCubeOnFloorPosition ray
+        dist = target.distance
+        if dist > CubeSize * @handLength
+            return null
+
         return @getAdjacentCubePosition target
 
     createCubeAt: (x, y, z) ->
@@ -579,7 +604,9 @@ class Game
         gridPos = @gridCoords p.x, p.y, p.z
         [x, y, z] = gridPos
         console.log('withinHandDistance'+@withinHandDistance p)
+        ###
         return unless @withinHandDistance p
+        ###
         return unless @grid.insideGrid x, y, z
         return if @grid.get(x, y, z)?
         @createCubeAt x, y, z
