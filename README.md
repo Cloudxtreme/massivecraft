@@ -1,19 +1,16 @@
-WebGLCraft
+MassiveCraft
 ==============
 
 WebGL implementation of [Minecraft](http://www.minecraft.net/) written in [Coffeescript](http://jashkenas.github.com/coffee-script/).
 
-Demo [here](http://danielribeiro.github.io/WebGLCraft/).
+Based on http://github.com/danielribeiro/WebGLCraft
 
-[![](http://metaphysicaldeveloper.files.wordpress.com/2011/12/screen-shot-2011-12-17-at-6-44-36-pm.png)](http://danielribeiro.github.io/WebGLCraft/)
-
-You can read more about the development of this project [here](http://metaphysicaldeveloper.wordpress.com/2011/12/20/implementing-minecraft-in-webgl/)
-
+And just a work for mesh perf tuning (voxels) and learning weggl and coffescripts :)
 
 Compiling
 ----
 
-It requires Coffeescript 1.1.3+ (version 1.6.2+ for [source maps](http://www.html5rocks.com/en/tutorials/developertools/sourcemaps/)), and node.js 0.6+
+It requires Coffeescript 1.1.3+ (version 1.6.2+ for [source maps](http://www.html5rocks.com/en/tutorials/developertools/sourcemaps/))
 
 To compile, run:
 
@@ -66,8 +63,6 @@ Make sure you have the latest coffeescript running (see [this](https://github.co
 Meta
 ----
 
-Created by [Daniel Ribeiro](http://metaphysicaldeveloper.wordpress.com/about-me). Not affiliated with Mojang. Minecraft is a trademark of [Mojang](http://mojang.com/).
+Originaly from [Daniel Ribeiro](http://metaphysicaldeveloper.wordpress.com/about-me). Not affiliated with Mojang. Minecraft is a trademark of [Mojang](http://mojang.com/).
 
 Released under the MIT License: http://www.opensource.org/licenses/mit-license.php
-
-http://github.com/danielribeiro/WebGLCraft

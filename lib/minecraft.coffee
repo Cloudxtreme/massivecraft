@@ -165,7 +165,7 @@ TextureHelper =
         image.src = path
         texture = new Texture(image, new UVMapping(), ClampToEdgeWrapping, ClampToEdgeWrapping, NearestFilter, LinearMipMapLinearFilter)
         image.onload = -> texture.needsUpdate = true
-        new THREE.MeshLambertMaterial(map: texture, ambient: 0xbbbbbb)
+        new THREE.MeshLambertMaterial(map: texture, ambient: 0xbbbbbb, vertexColors: THREE.VertexColors)
 
 
     tileTexture: (path, repeatx, repeaty) ->
@@ -176,7 +176,7 @@ TextureHelper =
         texture.repeat.x = repeatx
         texture.repeat.y = repeaty
         image.onload = -> texture.needsUpdate = true
-        new THREE.MeshLambertMaterial(map: texture, ambient: 0xbbbbbb)
+        new THREE.MeshLambertMaterial(map: texture, ambient: 0xbbbbbb, vertexColors: THREE.VertexColors)
 
 
 
@@ -197,7 +197,9 @@ class Floor
 
 class Game
     constructor: (@populateWorldFunction) ->
+        @ze = true
         @chunk = []
+        @chunks = {}
         @rad = CubeSize
         @createMaterials()
         @currentMeshSpec = @createGrassGeometry()
@@ -209,15 +211,16 @@ class Game
         @onGround = true
         @pause = off
         @fullscreen = off
+        @camera = @createCamera()
+        @ray_camera = @createCamera()
+        @scene = new Scene()
+        @scene.fog = new THREE.FogExp2( 0xffffff, 0.00015 );        
         @renderer = @createRenderer()
         @rendererPosition = $("#minecraft-container canvas").offset()
-        @camera = @createCamera()
-        @ray_camera = @createCamera()        
         THREEx.WindowResize @renderer, @camera
         @canvas = @renderer.domElement
         @controls = new Controls @camera, @canvas
         @player = new Player()
-        @scene = new Scene()
         @ray_scene = new Scene()        
         new Floor(50000, 50000).addToScene @scene
         @scene.add @camera
@@ -305,7 +308,7 @@ class Game
                 data[i][j] = 0
         perlin = new ImprovedNoise()
         quality = 0.05
-        z = Math.random() * 100
+        z = 100 #Math.random() * 100
         4.times (j) ->
             size.times (x) ->
                 size.times (y) ->
@@ -323,8 +326,18 @@ class Game
              diff = new Date().getTime() - t0
              console.log('CHUNK GENERATION IN '+diff)
 
+      ###
+      t0 = new Date().getTime()
+      mesh = add_world()
+      diff = new Date().getTime() - t0
+      console.log('GENERATED MESH in '+diff)
+      console.log(mesh)
+      @scene.add(mesh)
+      ###
+      
 
     createChunk: (px, pz) ->
+      @chunks[''+px+'-'+pz] = []
       middle = px * 32 / 2 + 1
       xoffset = px*32
       zoffset = pz*32
@@ -343,20 +356,31 @@ class Game
           height = (Math.abs Math.floor(data[i + @world_size][j + @world_size])) + 1
           playerHeight = (height + 1) * CubeSize if i == 0 and j == 0
           playerHeight = 300
-          height.times (k) => @cubeAt xoffset + middle + i , k, zoffset + middle + j
+          # height.times (k) =>
+          for k in [0..height]
+            cmesh = @cubeAt xoffset + middle + i , k, zoffset + middle + j
+            @chunks[''+px+'-'+pz].push(cmesh)            
           for k in [0..31]
             idx = j*32*32 + k*32 + i
             if k < height
               @chunk[idx] = 1
             else
               @chunk[idx] = 0
-      console.log(@chunk)
+      # console.log(@chunk)
       middlePos = middle * CubeSize
       @player.pos.set middlePos, playerHeight, middlePos
       t0 = new Date().getTime();
       @createMesh middle, px32, pz32, @chunk
       diff = new Date().getTime() - t0
       console.log('CREATE MESH '+diff)
+
+      bigMesh = new THREE.Geometry();
+      for mesh in @chunks[''+px+'-'+pz]
+          THREE.GeometryUtils.merge(bigMesh, mesh)
+      group = new THREE.Mesh(bigMesh, new THREE.MeshFaceMaterial(@currentMeshSpec.material))#new THREE.MeshBasicMaterial({color : 0x3D3D3D, wireframe : true }) )
+      group.matrixAutoUpdate = false;
+      group.updateMatrix();
+      @scene.add(group)
 
 
     createMesh: (middle, px32, pz32, voxels) ->      
@@ -375,7 +399,7 @@ class Game
       
       @materials.paint(mmesh.surfaceMesh)
       
-      mmesh.addToScene(@scene)
+      #mmesh.addToScene(@scene)
 
 
 
@@ -395,12 +419,16 @@ class Game
         meshSpec or=@currentMeshSpec
         if not visible?
            visible = false
-        console.log('VISIBLE?'+visible)
+        #        console.log('VISIBLE?'+visible)
         if visible
             wireMaterial = new THREE.MeshBasicMaterial({color : 0xffffff, wireframe : true, doubleSide:true })
         else
             wireMaterial = new THREE.MeshBasicMaterial( { visible: false } )
-        mesh = new Mesh(meshSpec.geometry, wireMaterial)
+
+        geometry = new THREE.CubeGeometry( @rad, @rad, @rad, 1, 1, 1)
+        geometry.computeFaceNormals()
+
+        mesh = new Mesh(geometry, wireMaterial)
         mesh.geometry.dynamic = false
         halfcube = CubeSize / 2
         mesh.position.set CubeSize * x, y * CubeSize + halfcube, CubeSize * z
@@ -414,12 +442,33 @@ class Game
         @grid.put x, y, z, mesh
         # always add the mesh to a special scene done for raycasting
         @ray_scene.add mesh
-        if visible
-            @scene.add mesh
+        # if visible
+        #    @scene.add mesh
+
+        shadow = new THREE.Color( 0x505050 )
+        light = new THREE.Color( 0xffffff );
+        ###
+        colors = mesh.geometry.faces[ 0 ].vertexColors
+        colors[ 0 ] = shadow
+        colors[ 2 ] = shadow
+        colors = mesh.geometry.faces[ 1 ].vertexColors
+        colors[ 0 ] = shadow
+        colors[ 2 ] = shadow
+        ###
+
+        if @ze
+            console.log(mesh.geometry.faces)
+            for face in mesh.geometry.faces
+                    face.vertexColors.push( light, shadow, shadow )
+                    #mesh.geometry.faces[ 1 ].vertexColors.push( shadow, light, shadow );            
+            @ze = false
+
         mesh.updateMatrix()
         mesh.matrixAutoUpdate = false
 
-        return
+                
+        return mesh
+        
 
     createCamera: ->
         camera = new PerspectiveCamera(45, @width() / @height(), 1, 10000)
@@ -427,11 +476,29 @@ class Game
         camera
 
     createRenderer: ->
-        renderer = new WebGLRenderer(antialias: true)
+        renderer = new WebGLRenderer({antialias: false})
         renderer.setSize @width(), @height()
         renderer.setClearColorHex(0xBFD1E5, 1.0)
         renderer.clear()
         $('#minecraft-container').append(renderer.domElement)
+
+        @composer = new THREE.EffectComposer( renderer);
+        effectSSAO = new THREE.ShaderPass( THREE.SSAOShader );
+        @composer.addPass(new THREE.RenderPass( @scene, @camera ))
+        @composer.addPass( effectSSAO );
+        renderTargetParametersRGBA = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat };
+        renderTargetParametersRGB  = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBFormat };
+        depthTarget = new THREE.WebGLRenderTarget( 0.75 * window.innerWidth, 0.75*(window.innerHeight - 2 * 100), renderTargetParametersRGBA )
+        effectSSAO.uniforms[ 'tDepth' ].value = depthTarget
+        effectSSAO.uniforms[ 'size' ].value.set( 0.75 * window.innerWidth, 0.75*(window.innerHeight - 2 * 100))
+        effectSSAO.uniforms[ 'cameraNear' ].value = @camera.near;
+        effectSSAO.uniforms[ 'cameraFar' ].value = @camera.far;
+        effectSSAO.uniforms[ 'fogNear' ].value = @scene.fog.near;
+        effectSSAO.uniforms[ 'fogFar' ].value = @scene.fog.far;
+        effectSSAO.uniforms[ 'fogEnabled' ].value = 1;
+        effectSSAO.uniforms[ 'aoClamp' ].value = 0.5;
+        effectSSAO.material.defines = { "RGBA_DEPTH": true, "ONLY_AO_COLOR": "1.0, 0.7, 0.5" };
+        
         renderer
 
     addLights: (scene) ->
@@ -501,7 +568,7 @@ class Game
         ###
         cubes = @grid.get_all()
         console.log('CUBES')
-        console.log(cubes)
+
         for o in ray.intersectObjects(cubes)
             console.log('WHAT IS?')
             console.log(o)
@@ -726,6 +793,11 @@ class Game
         @controls.update()
         @setCameraEyes()
         @renderer.render @scene, @camera
+
+        @renderer.shadowMapEnabled = false;
+        # do postprocessing
+        @composer.render( 0.1 );
+        
         @stats.update()
         return
 
